@@ -5,7 +5,44 @@ wget https://dlcdn.apache.org/kafka/3.9.1/kafka_2.12-3.9.1.tgz
 tar -xzf kafka_2.12-3.9.1.tgz
 cd kafka_2.12-3.9.1
 
-bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic orders.events.v1 --partitions 6 --replication-factor 3 --config retention.ms=3d --config cleanup.policy=delete --config min.insync.replicas=2
+вместо localhost везде явно указать ip 
+(если вы так же как и я, контейнеры запускаете с помощью docker, а topic создаете в WSL,
+ сначала в WSl пропишите команду "ip route show default" и затем этот ip вставьте в файл с контейнерами и при создании топика)
 
-bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+1) bin/kafka-topics.sh --bootstrap-server 172.20.192.1:9092 --create --topic orders.events.v1 --partitions 6 --replication-factor 3 --config retention.ms=3d --config cleanup.policy=delete --config min.insync.replicas=2
+
+bin/kafka-topics.sh --bootstrap-server 172.20.192.1:9092 \
   --describe --topic orders.events.v1
+
+2) bin/kafka-topics.sh --bootstrap-server 172.20.192.1:9092   --create --topic orders.dict.v1   --partitions 4 --replication-factor 3   --config delete.retention.ms=86400000   --config cleanup.policy=compact
+
+      Как «удалить» пользователя?
+        В compact-топике удаление = отправка сообщения с тем же ключом, но value = null.
+        Такое сообщение называется tombstone («надгробие»).
+        При компактификации Kafka оставит только последнее значение на ключ, и если оно null — запись исчезнет из лога.
+      Зачем delete.retention.ms?
+        Даже после появления tombstone, Kafka не удаляет его сразу.
+        Параметр delete.retention.ms задаёт минимальное время хранения tombstone (по умолчанию — 24 часа).
+      Это нужно, чтобы:
+        Все консюмеры успели увидеть удаление.
+        Избежать ситуации, когда новый консюмер «пропустит» tombstone и увидит старое значение.
+
+3) 
+Объём данных в сутки (на диск, с учётом репликации):
+Продюсер пишет 50 ГБ/сутки.
+Но Kafka хранит RF=3 копии, значит, на диске будет:
+50 ГБ × 3 = 150 ГБ/сутки.
+Нужно хранить 2 суток:
+150 ГБ/сутки × 2 = 300 ГБ — общий объём на весь топик.
+Топик имеет 8 партиций, а retention.bytes задаётся на одну партицию:
+retention.bytes = 300 ГБ / 8 = 37.5 ГБ
+37.5 × 1024³ = 37.5 × 1073741824 ≈ 40265318400 байт
+retention.bytes=40265318400
+
+bin/kafka-topics.sh --bootstrap-server $HOST_IP:9092 \
+  --create \
+  --topic high_volume_topic \
+  --partitions 8 \
+  --replication-factor 3 \
+  --config retention.bytes=40265318400 \
+  --config cleanup.policy=delete
