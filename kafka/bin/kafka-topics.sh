@@ -1,0 +1,1 @@
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic orders.events.v1 --partitions 6 --replication-factor 3 --config retention.ms=3d --config cleanup.policy=delete --config min.insync.replicas=2

@@ -1,0 +1,11 @@
+sudo apt update
+sudo apt install openjdk-11-jdk -y
+
+wget https://dlcdn.apache.org/kafka/3.9.1/kafka_2.12-3.9.1.tgz
+tar -xzf kafka_2.12-3.9.1.tgz
+cd kafka_2.12-3.9.1
+
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic orders.events.v1 --partitions 6 --replication-factor 3 --config retention.ms=3d --config cleanup.policy=delete --config min.insync.replicas=2
+
+bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  --describe --topic orders.events.v1
